@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Kick Accounting API
+  title: Accounting API
   version: 1.0.0
   description: >
     Backend accounting platform with General Ledger, journal entries,

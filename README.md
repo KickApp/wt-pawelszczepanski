@@ -1,4 +1,4 @@
-# Kick Accounting Platform
+# Accounting Platform
 
 A backend accounting system built with Express.js and PostgreSQL that stores a General Ledger, generates financial reports (Trial Balance, P&L, Balance Sheet), and ingests data from Excel exports.
 
