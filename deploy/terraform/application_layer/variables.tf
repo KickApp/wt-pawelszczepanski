@@ -13,13 +13,19 @@ variable "zone_name" {
 variable "domain_name" {
   description = "Full domain name for the app"
   type        = string
-  default     = "accounting-8cvbj8765rv.pawel.dev"
+  default     = "main.accounting-8cvbj8765rv.pawel.dev"
 }
 
 variable "app_image_tag" {
   description = "Container image tag (typically git SHA)"
   type        = string
   default     = "latest"
+}
+
+variable "base_domain" {
+  description = "Base domain for the platform (index page, monitoring subdomains)"
+  type        = string
+  default     = "accounting-8cvbj8765rv.pawel.dev"
 }
 
 variable "google_sa_secret_name" {

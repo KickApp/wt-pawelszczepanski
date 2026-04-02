@@ -24,7 +24,7 @@ service:
 
 ingress:
   enabled: true
-  host: accounting-8cvbj8765rv.pawel.dev
+  host: main.accounting-8cvbj8765rv.pawel.dev
   groupName: accounting
 
 env:

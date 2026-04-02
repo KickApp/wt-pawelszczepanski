@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "index.fullname" . }}-html
+  labels:
+    {{- include "index.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+        location /data/ {
+            alias /data/;
+            add_header Cache-Control "no-cache";
+            default_type application/json;
+        }
+    }
+  discover.sh: |
+    #!/bin/sh
+    echo '[]' > /data/pr-envs.json
+    while true; do
+      kubectl get ingresses -A -o json 2>/dev/null | \
+        jq -c '[.items[].spec.rules[]?.host // empty | select(test("{{ .Values.discovery.hostPattern }}")) ] | sort | unique | map({host: ., pr: (split(".")[0] | ltrimstr("pr-"))})' \
+        > /tmp/pr-envs.json && mv /tmp/pr-envs.json /data/pr-envs.json
+      sleep {{ .Values.discovery.interval }}
+    done
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Accounting Platform</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; color: #333; }
+        h1 { border-bottom: 2px solid #eee; padding-bottom: 12px; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 8px 0; }
+        .section { margin-top: 24px; }
+        .note { color: #666; font-size: 0.9em; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+        #pr-list li::before { content: "PR #"; }
+      </style>
+    </head>
+    <body>
+      <h1>Accounting Platform</h1>
+      <div class="section">
+        <h2>Application</h2>
+        <ul>
+          <li><a href="http://{{ .Values.links.mainApp }}">Main Application</a></li>
+          <li><a href="http://{{ .Values.links.mainApp }}/docs">API Docs (Swagger)</a></li>
+        </ul>
+      </div>
+      <div class="section">
+        <h2>Monitoring</h2>
+        <ul>
+          <li><a href="http://{{ .Values.links.grafana }}">Grafana</a></li>
+          <li><a href="http://{{ .Values.links.prometheus }}">Prometheus</a></li>
+        </ul>
+      </div>
+      <div class="section">
+        <h2>PR Environments</h2>
+        <ul id="pr-list"></ul>
+        <p id="pr-empty" class="note" style="display:none">No active PR environments.</p>
+      </div>
+      <script>
+        function loadPREnvs() {
+          fetch('/data/pr-envs.json')
+            .then(function(r) { return r.json(); })
+            .then(function(envs) {
+              var list = document.getElementById('pr-list');
+              var empty = document.getElementById('pr-empty');
+              if (!envs.length) {
+                list.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+              }
+              empty.style.display = 'none';
+              list.innerHTML = envs.map(function(e) {
+                return '<li><a href="http://' + e.host + '">' + e.pr + '</a></li>';
+              }).join('');
+            })
+            .catch(function() {});
+        }
+        loadPREnvs();
+        setInterval(loadPREnvs, 5000);
+      </script>
+    </body>
+    </html>
