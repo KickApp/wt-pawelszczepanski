@@ -16,6 +16,7 @@ env:
   ECR_REPOSITORY: accounting-app
   EKS_CLUSTER: accounting
   DOMAIN: accounting-8cvbj8765rv.pawel.dev
+  ECR_REPOSITORY_URL: 739055946005.dkr.ecr.us-west-2.amazonaws.com/accounting-app
 
 jobs:
   test:
@@ -152,14 +153,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get ECR repository URL
-        id: ecr
-        run: |
-          URL=$(aws ecr describe-repositories \
-            --repository-names "${{ env.ECR_REPOSITORY }}" \
-            --query 'repositories[0].repositoryUri' --output text)
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
-
       - name: Setup kubectl and Helm
         run: |
           aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
@@ -168,13 +161,12 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
-          ECR_URL: ${{ steps.ecr.outputs.url }}
         run: |
           helm upgrade --install "pr-${PR_NUMBER}" ./deploy/helm/accounting-app \
             --namespace "pr-${PR_NUMBER}" \
             --create-namespace \
             -f deploy/helm/pr-values.yaml \
-            --set image.repository="${ECR_URL}" \
+            --set image.repository="${ECR_REPOSITORY_URL}" \
             --set image.tag="${IMAGE_TAG}" \
             --set ingress.host="pr-${PR_NUMBER}.${DOMAIN}" \
             --set env.DB_NAME="pr_${PR_NUMBER}" \
