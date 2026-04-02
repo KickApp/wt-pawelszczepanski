@@ -60,11 +60,9 @@ resources:
 
 dbSetup:
   enabled: false
-  password: ""
 
 dbTeardown:
   enabled: false
-  password: ""
 
 health:
   path: /api/health

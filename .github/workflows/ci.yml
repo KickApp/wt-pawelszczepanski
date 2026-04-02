@@ -165,16 +165,6 @@ jobs:
           terraform init
           echo "endpoint=$(terraform output -raw endpoint)" >> "$GITHUB_OUTPUT"
           echo "port=$(terraform output -raw port)" >> "$GITHUB_OUTPUT"
-          echo "password_secret=$(terraform output -raw password_secret_name)" >> "$GITHUB_OUTPUT"
-
-      - name: Get dev DB password
-        id: db-password
-        run: |
-          PASSWORD=$(aws secretsmanager get-secret-value \
-            --secret-id "${{ steps.dev-rds.outputs.password_secret }}" \
-            --query SecretString --output text)
-          echo "::add-mask::${PASSWORD}"
-          echo "password=${PASSWORD}" >> "$GITHUB_OUTPUT"
 
       - name: Get ECR repository URL
         id: ecr
@@ -195,7 +185,6 @@ jobs:
           ECR_URL: ${{ steps.ecr.outputs.url }}
           DEV_RDS_ENDPOINT: ${{ steps.dev-rds.outputs.endpoint }}
           DEV_RDS_PORT: ${{ steps.dev-rds.outputs.port }}
-          DB_PASSWORD: ${{ steps.db-password.outputs.password }}
         run: |
           helm upgrade --install "pr-${PR_NUMBER}" ./deploy/helm/accounting-app \
             --namespace "pr-${PR_NUMBER}" \
@@ -208,8 +197,6 @@ jobs:
             --set env.DB_PORT="${DEV_RDS_PORT}" \
             --set env.DB_NAME="pr_${PR_NUMBER}" \
             --set env.DB_USER="app" \
-            --set dbSetup.password="${DB_PASSWORD}" \
-            --set dbTeardown.password="${DB_PASSWORD}" \
             --set externalSecrets.enabled=true \
             --set externalSecrets.dbPasswordSecretName="dev/db-password" \
             --set externalSecrets.googleSaKeySecretName="accounting/google-sa-key" \

@@ -33,7 +33,10 @@ spec:
             - name: PGUSER
               value: {{ .Values.env.DB_USER | quote }}
             - name: PGPASSWORD
-              value: {{ .Values.dbTeardown.password | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "accounting-app.fullname" . }}
+                  key: DB_PASSWORD
           resources:
             requests:
               cpu: 50m
