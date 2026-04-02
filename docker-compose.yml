@@ -39,5 +39,21 @@ services:
     command: >
       sh -c "npx knex migrate:latest --knexfile knexfile.ts && node dist/index.js"
 
+  seed:
+    build: .
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: accounting
+      DB_USER: app
+      DB_PASSWORD: ${DB_PASSWORD:-devpassword}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "npx knex migrate:latest --knexfile knexfile.ts && node scripts/seed.js"
+    profiles:
+      - seed
+
 volumes:
   pgdata:
