@@ -26,6 +26,8 @@ spec:
               dropdb --if-exists "$DB_NAME"
               echo "Database $DB_NAME dropped"
           env:
+            - name: DB_NAME
+              value: {{ .Values.env.DB_NAME | quote }}
             - name: PGHOST
               valueFrom:
                 secretKeyRef:
