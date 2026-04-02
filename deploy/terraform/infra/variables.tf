@@ -19,7 +19,7 @@ variable "domain_name" {
 variable "github_repo" {
   description = "GitHub repository (owner/repo) allowed to push to ECR"
   type        = string
-  default     = "kickapp/wt-pawelszczepanski"
+  default     = "KickApp/wt-pawelszczepanski"
 }
 
 variable "google_sa_key_json" {

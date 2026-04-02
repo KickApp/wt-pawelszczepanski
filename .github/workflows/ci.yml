@@ -113,9 +113,9 @@ jobs:
           terraform_version: "~> 1.5"
 
       - name: Terraform Init
-        working-directory: infra/terraform/application_layer
+        working-directory: deploy/terraform/application_layer
         run: terraform init
 
       - name: Terraform Apply
-        working-directory: infra/terraform/application_layer
+        working-directory: deploy/terraform/application_layer
         run: terraform apply -auto-approve -var="app_image_tag=${{ needs.build-and-push.outputs.version }}"
