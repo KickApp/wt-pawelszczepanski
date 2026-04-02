@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: accounting
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-devpassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d accounting"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: accounting
+      DB_USER: app
+      DB_PASSWORD: ${DB_PASSWORD:-devpassword}
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: info
+      GOOGLE_SA_KEY_PATH: /secrets/google-sa-key.json
+    volumes:
+      - ./google-sa-key.json:/secrets/google-sa-key.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "npx knex migrate:latest --knexfile knexfile.ts && node dist/index.js"
+
+volumes:
+  pgdata:

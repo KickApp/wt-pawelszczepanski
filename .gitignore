@@ -1,3 +1,22 @@
 .idea
+.DS_Store
+node_modules
+dist
 
 /*.spec.md
+
+.env
+.env.*
+!.env.example
+
+google-sa-key.json
+
+# Terraform
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfvars
+!infra/terraform/terraform.tfvars
+!infra/terraform/application_layer/terraform.tfvars
+infra/**/*.plan.out
+infra/**/plan.out

@@ -1,0 +1,1049 @@
+openapi: 3.0.3
+info:
+  title: Kick Accounting API
+  version: 1.0.0
+  description: >
+    Backend accounting platform with General Ledger, journal entries,
+    and financial reports (Trial Balance, P&L, Balance Sheet).
+
+servers:
+  - url: /api
+    description: API base path
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+              example:
+                status: ok
+                timestamp: "2025-06-15T10:30:00.000Z"
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List all accounts
+      operationId: listAccounts
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+              example:
+                data:
+                  - id: "a1b2c3d4-0001-4000-8000-000000000001"
+                    code: "10100"
+                    name: "Bank Account - Chase Business Checking - 0205"
+                    class: Assets
+                    type: Bank Account
+                    createdAt: "2025-06-15T10:00:00.000Z"
+                    updatedAt: "2025-06-15T10:00:00.000Z"
+                  - id: "a1b2c3d4-0001-4000-8000-000000000002"
+                    code: "40000"
+                    name: Revenue
+                    class: Income
+                    type: Revenue
+                    createdAt: "2025-06-15T10:00:00.000Z"
+                    updatedAt: "2025-06-15T10:00:00.000Z"
+
+    post:
+      tags: [Accounts]
+      summary: Create an account
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccount"
+            example:
+              code: "10100"
+              name: "Chase Business Checking"
+              type: "Bank Account"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Account"
+              example:
+                data:
+                  id: "a1b2c3d4-0001-4000-8000-000000000001"
+                  code: "10100"
+                  name: "Chase Business Checking"
+                  class: Assets
+                  type: Bank Account
+                  createdAt: "2025-06-15T10:00:00.000Z"
+                  updatedAt: "2025-06-15T10:00:00.000Z"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "code: code must be a 5-digit string"
+
+  /journal-entries:
+    get:
+      tags: [Journal Entries]
+      summary: List journal entries (paginated)
+      operationId: listJournalEntries
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter from date (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter to date (YYYY-MM-DD)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated journal entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/JournalEntryLine"
+                  meta:
+                    $ref: "#/components/schemas/PaginationMeta"
+              example:
+                data:
+                  - id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                    date: "2025-01-02"
+                    accountId: "a1b2c3d4-0001-4000-8000-000000000001"
+                    accountCode: "10100"
+                    accountName: "Bank Account - Chase Business Checking - 0205"
+                    description: "Herman Miller Chair"
+                    debitAmount: null
+                    creditAmount: 1650.00
+                    referenceNumber: "JE-2D3D28BD"
+                    counterparty: null
+                    createdAt: "2025-06-15T10:00:00.000Z"
+                    updatedAt: "2025-06-15T10:00:00.000Z"
+                meta:
+                  total: 412
+                  page: 1
+                  limit: 50
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "startDate: Invalid"
+
+    post:
+      tags: [Journal Entries]
+      summary: Create a journal entry
+      operationId: createJournalEntry
+      description: >
+        Creates a balanced journal entry. Validated against accounting spec invariants:
+        (1) Each line has exactly one of debitAmount or creditAmount, never both.
+        (2) Sum of debits must equal sum of credits (double-entry balance).
+        (3) All referenced accountIds must exist.
+        (4) No duplicate accountIds within the same entry.
+        (5) Amounts must be positive (> 0).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJournalEntry"
+            examples:
+              simple-purchase:
+                summary: Simple 2-line purchase
+                value:
+                  date: "2025-03-10"
+                  description: "Monthly web hosting"
+                  counterparty: "Hetzner"
+                  lines:
+                    - accountId: "a1b2c3d4-0001-4000-8000-000000000001"
+                      debitAmount: 49.99
+                    - accountId: "a1b2c3d4-0001-4000-8000-000000000002"
+                      creditAmount: 49.99
+              payroll-with-taxes:
+                summary: Payroll with employer tax — 3 lines
+                value:
+                  date: "2025-03-31"
+                  description: "March 2025 payroll"
+                  counterparty: "Gusto"
+                  lines:
+                    - accountId: "a1b2c3d4-0001-4000-8000-000000000010"
+                      debitAmount: 8500.00
+                    - accountId: "a1b2c3d4-0001-4000-8000-000000000011"
+                      debitAmount: 650.25
+                    - accountId: "a1b2c3d4-0001-4000-8000-000000000012"
+                      creditAmount: 9150.25
+      responses:
+        "201":
+          description: Journal entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/JournalEntryLine"
+              examples:
+                simple-purchase:
+                  summary: Response for simple 2-line purchase
+                  value:
+                    data:
+                      - id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                        date: "2025-03-10"
+                        accountId: "a1b2c3d4-0001-4000-8000-000000000001"
+                        accountCode: "62100"
+                        accountName: "Web Hosting"
+                        description: "Monthly web hosting"
+                        debitAmount: 49.99
+                        creditAmount: null
+                        referenceNumber: "JE-A7F2B91D"
+                        counterparty: "Hetzner"
+                        createdAt: "2025-03-10T14:30:00.000Z"
+                        updatedAt: "2025-03-10T14:30:00.000Z"
+                      - id: "f47ac10b-58cc-4372-a567-0e02b2c3d480"
+                        date: "2025-03-10"
+                        accountId: "a1b2c3d4-0001-4000-8000-000000000002"
+                        accountCode: "10100"
+                        accountName: "Bank Account - Chase Business Checking - 0205"
+                        description: "Monthly web hosting"
+                        debitAmount: null
+                        creditAmount: 49.99
+                        referenceNumber: "JE-A7F2B91D"
+                        counterparty: "Hetzner"
+                        createdAt: "2025-03-10T14:30:00.000Z"
+                        updatedAt: "2025-03-10T14:30:00.000Z"
+        "400":
+          description: Validation error (invalid input, duplicate accounts, missing accounts)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "lines: Each line must have exactly one of debitAmount or creditAmount"
+        "422":
+          description: Double-entry violation (debits != credits)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "lines: Double-entry violation: total debits (500.00) must equal total credits (499.00)"
+
+  /journal-entries/{ref}:
+    parameters:
+      - name: ref
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Reference number (e.g. JE-2D3D28BD)
+
+    get:
+      tags: [Journal Entries]
+      summary: Get journal entry by reference number
+      operationId: getJournalEntry
+      responses:
+        "200":
+          description: Journal entry lines
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/JournalEntryLine"
+              example:
+                data:
+                  - id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                    date: "2025-03-10"
+                    accountId: "a1b2c3d4-0001-4000-8000-000000000001"
+                    accountCode: "62100"
+                    accountName: "Web Hosting"
+                    description: "Monthly web hosting"
+                    debitAmount: 49.99
+                    creditAmount: null
+                    referenceNumber: "JE-A7F2B91D"
+                    counterparty: "Hetzner"
+                    createdAt: "2025-03-10T14:30:00.000Z"
+                    updatedAt: "2025-03-10T14:30:00.000Z"
+                  - id: "f47ac10b-58cc-4372-a567-0e02b2c3d480"
+                    date: "2025-03-10"
+                    accountId: "a1b2c3d4-0001-4000-8000-000000000002"
+                    accountCode: "10100"
+                    accountName: "Bank Account - Chase Business Checking - 0205"
+                    description: "Monthly web hosting"
+                    debitAmount: null
+                    creditAmount: 49.99
+                    referenceNumber: "JE-A7F2B91D"
+                    counterparty: "Hetzner"
+                    createdAt: "2025-03-10T14:30:00.000Z"
+                    updatedAt: "2025-03-10T14:30:00.000Z"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "Journal entry not found"
+
+    put:
+      tags: [Journal Entries]
+      summary: Update a journal entry
+      operationId: updateJournalEntry
+      description: >
+        Replaces all lines of an existing journal entry.
+        Same validation rules as create: double-entry balance, no duplicate accounts, all accounts must exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJournalEntry"
+      responses:
+        "200":
+          description: Updated journal entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/JournalEntryLine"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "Journal entry JE-XXXXXXXX not found"
+
+    delete:
+      tags: [Journal Entries]
+      summary: Delete a journal entry
+      operationId: deleteJournalEntry
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "Journal entry JE-XXXXXXXX not found"
+
+  /reports/trial-balance:
+    get:
+      tags: [Reports]
+      summary: Trial Balance
+      operationId: getTrialBalance
+      description: >
+        Summarizes all accounts with total debits, credits, and net balance
+        for a date range. Grand total debits must equal grand total credits.
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Period start (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Period end (YYYY-MM-DD)
+      responses:
+        "200":
+          description: Trial Balance report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TrialBalance"
+              example:
+                data:
+                  startDate: "2025-01-01"
+                  endDate: "2025-12-31"
+                  rows:
+                    - code: "10100"
+                      name: "Bank Account - Chase Business Checking - 0205"
+                      class: Assets
+                      type: Bank Account
+                      totalDebit: 248500.90
+                      totalCredit: 133245.73
+                      balance: 115255.17
+                    - code: "40000"
+                      name: Revenue
+                      class: Income
+                      type: Revenue
+                      totalDebit: 0
+                      totalCredit: 278121.57
+                      balance: 278121.57
+                  grandTotalDebit: 556742.14
+                  grandTotalCredit: 556742.14
+                  isBalanced: true
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "startDate: startDate must be YYYY-MM-DD"
+
+  /reports/profit-and-loss:
+    get:
+      tags: [Reports]
+      summary: Profit & Loss (Income Statement)
+      operationId: getProfitAndLoss
+      description: >
+        Revenue minus expenses over a period.
+        Sections: Income, COGS, Gross Profit, Operating Expenses,
+        Net Operating Income, Other Income/Expenses, Net Income.
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: P&L report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProfitAndLoss"
+              example:
+                data:
+                  startDate: "2025-01-01"
+                  endDate: "2025-12-31"
+                  income:
+                    label: Income
+                    accounts:
+                      - code: "40000"
+                        name: Revenue
+                        class: Income
+                        type: Revenue
+                        totalDebit: 0
+                        totalCredit: 278121.57
+                        balance: 278121.57
+                    total: 278121.57
+                  costOfGoodsSold:
+                    label: Cost of Goods Sold
+                    accounts: []
+                    total: 0
+                  grossProfit: 278121.57
+                  operatingExpenses:
+                    label: Operating Expenses
+                    accounts:
+                      - code: "60000"
+                        name: "Salaries and Wages"
+                        class: Expenses
+                        type: "Salaries and Wages"
+                        totalDebit: 45833.37
+                        totalCredit: 0
+                        balance: 45833.37
+                    total: 152765.51
+                  netOperatingIncome: 125356.06
+                  otherIncomeExpenses:
+                    label: Other Income/Expenses
+                    accounts:
+                      - code: "80100"
+                        name: "Interest Income"
+                        class: Expenses
+                        type: "Interest Income"
+                        totalDebit: 0
+                        totalCredit: 536.00
+                        balance: -536.00
+                    total: -7338.00
+                  netIncome: 132694.06
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /reports/balance-sheet:
+    get:
+      tags: [Reports]
+      summary: Balance Sheet
+      operationId: getBalanceSheet
+      description: >
+        Financial position at a point in time.
+        Assets = Liabilities + Equity.
+        Net Income from current fiscal year P&L (Jan 1 of asOfDate year through asOfDate) is injected into Equity.
+      parameters:
+        - name: asOfDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Report date (YYYY-MM-DD)
+      responses:
+        "200":
+          description: Balance Sheet report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BalanceSheet"
+              example:
+                data:
+                  asOfDate: "2025-12-31"
+                  currentAssets:
+                    label: Current Assets
+                    accounts:
+                      - code: "10100"
+                        name: "Bank Account - Chase Business Checking - 0205"
+                        class: Assets
+                        type: Bank Account
+                        totalDebit: 248500.90
+                        totalCredit: 133245.73
+                        balance: 115255.17
+                    total: 85917.19
+                  nonCurrentAssets:
+                    label: Non-Current Assets
+                    accounts: []
+                    total: 0
+                  totalAssets: 85917.19
+                  currentLiabilities:
+                    label: Current Liabilities
+                    accounts:
+                      - code: "21000"
+                        name: "Credit Card - Amex Business Gold Card - 1001"
+                        class: Liabilities
+                        type: Credit Card
+                        totalDebit: 10520.00
+                        totalCredit: 20298.62
+                        balance: 9778.62
+                    total: 19395.13
+                  nonCurrentLiabilities:
+                    label: Non-Current Liabilities
+                    accounts: []
+                    total: 0
+                  totalLiabilities: 19395.13
+                  equity:
+                    label: Equity
+                    accounts:
+                      - code: "31000"
+                        name: "Owner Draws"
+                        class: Equity
+                        type: "Owner Draws"
+                        totalDebit: 51000.00
+                        totalCredit: 0
+                        balance: -51000.00
+                      - code: NET-INCOME
+                        name: "Net Income (Current Period)"
+                        class: Equity
+                        type: Retained Earnings
+                        totalDebit: 0
+                        totalCredit: 117522.06
+                        balance: 117522.06
+                    total: 66522.06
+                  totalLiabilitiesAndEquity: 85917.19
+                  isBalanced: true
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "asOfDate: asOfDate must be YYYY-MM-DD"
+
+  /export/download:
+    get:
+      tags: [Export]
+      summary: Export GL to Excel
+      operationId: exportExcel
+      description: >
+        Downloads the General Ledger for the given date range as an .xlsx file,
+        grouped by account with Beginning/Ending Balance rows, running balance,
+        and formatted amounts.
+        Columns: Date, Source, Reference, Description, Counterparty, Split, Amount, Balance.
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Period start (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Period end (YYYY-MM-DD)
+      responses:
+        "200":
+          description: Excel file download
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="general_ledger_2025-01-01_2025-12-31.xlsx"'
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /export/google:
+    post:
+      tags: [Export]
+      summary: Export GL to Google Sheets
+      operationId: exportGoogleSheets
+      description: >
+        Creates a new Google Spreadsheet with the General Ledger for the given
+        date range, using the same layout as the Excel export: grouped by account
+        with Beginning/Ending Balance rows, running balance, and formatted amounts.
+        Columns: Date, Source, Reference, Description, Counterparty, Split, Amount, Balance.
+        Optionally shares it with a specified email address.
+        Requires Google service account credentials (GOOGLE_SA_KEY_PATH or GOOGLE_SA_KEY_JSON).
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Period start (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Period end (YYYY-MM-DD)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleExportOptions"
+            example:
+              shareWith: "pawel@example.com"
+      responses:
+        "200":
+          description: Created spreadsheet info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/GoogleExportResult"
+              example:
+                data:
+                  spreadsheetId: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+                  spreadsheetUrl: "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms/edit"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Google API error (credentials not configured, quota exceeded, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "Google credentials not configured. Set GOOGLE_SA_KEY_PATH or GOOGLE_SA_KEY_JSON."
+
+  /ingest:
+    post:
+      tags: [Data]
+      summary: Ingest Excel GL export
+      operationId: ingestData
+      description: >
+        Parses the bundled Excel file (data/Account_Transactions_of_Internet_Money_2025-01-01-2025-12-31.xlsx),
+        creates/upserts accounts, and inserts journal entry lines.
+        Deduplicates double-entry pairs automatically.
+      responses:
+        "200":
+          description: Ingestion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+              example:
+                data:
+                  accounts: 24
+                  journalEntries: 206
+                message: "Ingestion complete"
+
+components:
+  schemas:
+    AccountClass:
+      type: string
+      enum:
+        - Assets
+        - Liabilities
+        - Equity
+        - Income
+        - Expenses
+
+    Account:
+      type: object
+      required: [id, code, name, class, type, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: "10100"
+        name:
+          type: string
+          example: "Bank Account - Chase Business Checking - 0205"
+        class:
+          $ref: "#/components/schemas/AccountClass"
+        type:
+          type: string
+          example: "Bank Account"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateAccount:
+      type: object
+      required: [code, name, type]
+      properties:
+        code:
+          type: string
+          pattern: "^\\d{5}$"
+          example: "10100"
+          description: Account code (5 digits). Class is derived from first digit.
+        name:
+          type: string
+          example: "Chase Business Checking"
+        type:
+          type: string
+          example: "Bank Account"
+
+    JournalEntryLine:
+      type: object
+      required: [id, date, accountId, referenceNumber, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        accountId:
+          type: string
+          format: uuid
+        accountCode:
+          type: string
+          example: "10100"
+        accountName:
+          type: string
+          example: "Bank Account - Chase Business Checking - 0205"
+        description:
+          type: string
+          nullable: true
+        debitAmount:
+          type: number
+          nullable: true
+          description: Decimal amount (e.g. 500.00), null if this is a credit line
+        creditAmount:
+          type: number
+          nullable: true
+          description: Decimal amount (e.g. 500.00), null if this is a debit line
+        referenceNumber:
+          type: string
+          example: "JE-2D3D28BD"
+        counterparty:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    JournalEntryLineInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        debitAmount:
+          type: number
+          minimum: 0.01
+          description: Provide debitAmount OR creditAmount, not both
+        creditAmount:
+          type: number
+          minimum: 0.01
+
+    CreateJournalEntry:
+      type: object
+      required: [date, lines]
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2025-01-15"
+        description:
+          type: string
+          maxLength: 500
+          example: "Office supplies purchase"
+        counterparty:
+          type: string
+          maxLength: 255
+          example: "Staples"
+        lines:
+          type: array
+          minItems: 2
+          items:
+            $ref: "#/components/schemas/JournalEntryLineInput"
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 412
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 50
+
+    TrialBalanceRow:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        class:
+          $ref: "#/components/schemas/AccountClass"
+        type:
+          type: string
+        totalDebit:
+          type: number
+        totalCredit:
+          type: number
+        balance:
+          type: number
+
+    TrialBalance:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrialBalanceRow"
+        grandTotalDebit:
+          type: number
+        grandTotalCredit:
+          type: number
+        isBalanced:
+          type: boolean
+
+    ReportSection:
+      type: object
+      properties:
+        label:
+          type: string
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrialBalanceRow"
+        total:
+          type: number
+
+    ProfitAndLoss:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        income:
+          $ref: "#/components/schemas/ReportSection"
+        costOfGoodsSold:
+          $ref: "#/components/schemas/ReportSection"
+        grossProfit:
+          type: number
+        operatingExpenses:
+          $ref: "#/components/schemas/ReportSection"
+        netOperatingIncome:
+          type: number
+        otherIncomeExpenses:
+          $ref: "#/components/schemas/ReportSection"
+        netIncome:
+          type: number
+
+    BalanceSheet:
+      type: object
+      properties:
+        asOfDate:
+          type: string
+          format: date
+        currentAssets:
+          $ref: "#/components/schemas/ReportSection"
+        nonCurrentAssets:
+          $ref: "#/components/schemas/ReportSection"
+        totalAssets:
+          type: number
+        currentLiabilities:
+          $ref: "#/components/schemas/ReportSection"
+        nonCurrentLiabilities:
+          $ref: "#/components/schemas/ReportSection"
+        totalLiabilities:
+          type: number
+        equity:
+          $ref: "#/components/schemas/ReportSection"
+        totalLiabilitiesAndEquity:
+          type: number
+        isBalanced:
+          type: boolean
+
+    IngestResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            accounts:
+              type: integer
+              description: Number of accounts created/updated
+            journalEntries:
+              type: integer
+              description: Number of journal entries ingested
+        message:
+          type: string
+
+    GoogleExportOptions:
+      type: object
+      properties:
+        shareWith:
+          type: string
+          format: email
+          description: Email address to share the created spreadsheet with (writer access)
+
+    GoogleExportResult:
+      type: object
+      properties:
+        spreadsheetId:
+          type: string
+        spreadsheetUrl:
+          type: string
+          format: uri
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message

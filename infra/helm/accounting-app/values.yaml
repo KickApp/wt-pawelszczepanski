@@ -1,0 +1,56 @@
+replicaCount: 2
+
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: true
+  host: accounting-8cvbj8765rv.pawel.dev
+  certificateArn: ""
+
+env:
+  NODE_ENV: production
+  PORT: "3000"
+  LOG_LEVEL: info
+  DB_HOST: ""
+  DB_PORT: "5432"
+  DB_NAME: accounting
+  DB_USER: app
+
+secrets:
+  dbPassword: ""
+  googleSaKeyJson: ""
+
+externalSecrets:
+  enabled: false
+  region: us-west-2
+  dbPasswordSecretName: accounting/db-password
+  googleSaKeySecretName: accounting/google-sa-key
+
+migration:
+  enabled: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+health:
+  path: /api/health
+  port: 3000

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "accounting-app.fullname" . }}
+  labels:
+    {{- include "accounting-app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "accounting-app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "accounting-app.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "accounting-app.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.migration.enabled }}
+      initContainers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["npx", "knex", "migrate:latest", "--knexfile", "knexfile.ts"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "accounting-app.fullname" . }}
+            - secretRef:
+                name: {{ include "accounting-app.fullname" . }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "accounting-app.fullname" . }}
+            - secretRef:
+                name: {{ include "accounting-app.fullname" . }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.health.path }}
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.health.path }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
