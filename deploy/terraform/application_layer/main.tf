@@ -45,6 +45,9 @@ resource "helm_release" "aws_lb_controller" {
     name  = "serviceMonitor.additionalLabels.release"
     value = "kube-prometheus-stack"
   }
+
+  # Deploy after kube-prometheus-stack so ServiceMonitor CRDs exist
+  depends_on = [helm_release.kube_prometheus_stack]
 }
 
 # external-dns for automatic Route53 record management
@@ -185,7 +188,6 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "7d"
   }
 
-  depends_on = [helm_release.aws_lb_controller]
 }
 
 # Accounting application
