@@ -1,4 +1,10 @@
-replicaCount: 1
+replicaCount: 2
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 1
 
 resources:
   requests:
