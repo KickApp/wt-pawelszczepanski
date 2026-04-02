@@ -6,13 +6,13 @@ metadata:
   labels:
     {{- include "accounting-app.labels" . | nindent 4 }}
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
     alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.health.path }}
 spec:
+  ingressClassName: alb
   rules:
     - host: {{ .Values.ingress.host }}
       http:
