@@ -9,6 +9,7 @@ export const db = knex({
     database: config.db.name,
     user: config.db.user,
     password: config.db.password,
+    ssl: config.db.ssl ? { rejectUnauthorized: false } : false,
   },
   pool: { min: 2, max: 10 },
 });

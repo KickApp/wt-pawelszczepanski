@@ -8,6 +8,7 @@ export const config = {
     name: process.env.DB_NAME || 'accounting',
     user: process.env.DB_USER || 'app',
     password: process.env.DB_PASSWORD || 'devpassword',
+    ssl: process.env.DB_SSL === 'true',
   },
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: process.env.LOG_LEVEL || 'info',

@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import type { Knex } from 'knex';
 
+const dbSsl = process.env.DB_SSL === 'true';
+
 const config: Knex.Config = {
   client: 'pg',
   connection: {
@@ -9,6 +11,7 @@ const config: Knex.Config = {
     database: process.env.DB_NAME || 'accounting',
     user: process.env.DB_USER || 'app',
     password: process.env.DB_PASSWORD || 'devpassword',
+    ssl: dbSsl ? { rejectUnauthorized: false } : false,
   },
   migrations: {
     directory: './src/db/migrations',

@@ -47,6 +47,27 @@ resource "aws_security_group" "rds" {
   }
 }
 
+resource "aws_db_parameter_group" "this" {
+  name_prefix = "dev-pg17-"
+  family      = "postgres17"
+  description = "Force SSL for dev PostgreSQL"
+
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+
+  tags = {
+    Name        = "dev"
+    Environment = "dev"
+    Terraform   = "true"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 resource "aws_db_instance" "this" {
   identifier = "dev"
 
@@ -63,6 +84,7 @@ resource "aws_db_instance" "this" {
   username = var.db_username
   password = random_password.db_password.result
 
+  parameter_group_name   = aws_db_parameter_group.this.name
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false

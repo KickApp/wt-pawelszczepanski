@@ -35,6 +35,7 @@ env:
   DB_PORT: "5432"
   DB_NAME: accounting
   DB_USER: app
+  DB_SSL: "true"
 
 secrets:
   dbPassword: ""
