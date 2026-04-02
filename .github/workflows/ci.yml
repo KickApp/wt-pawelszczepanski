@@ -152,20 +152,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "~> 1.5"
-          terraform_wrapper: false
-
-      - name: Get dev RDS info
-        id: dev-rds
-        working-directory: deploy/terraform/dev-rds
-        run: |
-          terraform init
-          echo "endpoint=$(terraform output -raw endpoint)" >> "$GITHUB_OUTPUT"
-          echo "port=$(terraform output -raw port)" >> "$GITHUB_OUTPUT"
-
       - name: Get ECR repository URL
         id: ecr
         run: |
@@ -183,8 +169,6 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
           ECR_URL: ${{ steps.ecr.outputs.url }}
-          DEV_RDS_ENDPOINT: ${{ steps.dev-rds.outputs.endpoint }}
-          DEV_RDS_PORT: ${{ steps.dev-rds.outputs.port }}
         run: |
           helm upgrade --install "pr-${PR_NUMBER}" ./deploy/helm/accounting-app \
             --namespace "pr-${PR_NUMBER}" \
@@ -193,12 +177,12 @@ jobs:
             --set image.repository="${ECR_URL}" \
             --set image.tag="${IMAGE_TAG}" \
             --set ingress.host="pr-${PR_NUMBER}.${DOMAIN}" \
-            --set env.DB_HOST="${DEV_RDS_ENDPOINT}" \
-            --set env.DB_PORT="${DEV_RDS_PORT}" \
             --set env.DB_NAME="pr_${PR_NUMBER}" \
             --set env.DB_USER="app" \
             --set externalSecrets.enabled=true \
             --set externalSecrets.dbPasswordSecretName="dev/db-password" \
+            --set externalSecrets.dbHostSecretName="dev/db-host" \
+            --set externalSecrets.dbPortSecretName="dev/db-port" \
             --set externalSecrets.googleSaKeySecretName="accounting/google-sa-key" \
             --wait --timeout 5m
 

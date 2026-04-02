@@ -208,16 +208,6 @@ resource "helm_release" "accounting_app" {
   }
 
   set {
-    name  = "env.DB_HOST"
-    value = local.rds_endpoint
-  }
-
-  set {
-    name  = "env.DB_PORT"
-    value = tostring(local.rds_port)
-  }
-
-  set {
     name  = "ingress.host"
     value = var.domain_name
   }
@@ -235,6 +225,16 @@ resource "helm_release" "accounting_app" {
   set {
     name  = "externalSecrets.dbPasswordSecretName"
     value = local.rds_password_secret
+  }
+
+  set {
+    name  = "externalSecrets.dbHostSecretName"
+    value = local.rds_host_secret
+  }
+
+  set {
+    name  = "externalSecrets.dbPortSecretName"
+    value = local.rds_port_secret
   }
 
   set {

@@ -31,13 +31,13 @@ env:
   NODE_ENV: production
   PORT: "3000"
   LOG_LEVEL: info
-  DB_HOST: ""
-  DB_PORT: "5432"
   DB_NAME: accounting
   DB_USER: app
   DB_SSL: "true"
 
 secrets:
+  dbHost: ""
+  dbPort: "5432"
   dbPassword: ""
   googleSaKeyJson: ""
 
@@ -45,6 +45,8 @@ externalSecrets:
   enabled: false
   region: us-west-2
   dbPasswordSecretName: accounting/db-password
+  dbHostSecretName: accounting/db-host
+  dbPortSecretName: accounting/db-port
   googleSaKeySecretName: accounting/google-sa-key
 
 migration:

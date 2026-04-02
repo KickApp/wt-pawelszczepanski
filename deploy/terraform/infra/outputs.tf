@@ -33,6 +33,16 @@ output "rds_password_secret_name" {
   value       = module.rds.password_secret_name
 }
 
+output "rds_host_secret_name" {
+  description = "Secrets Manager secret name for DB host"
+  value       = module.rds.host_secret_name
+}
+
+output "rds_port_secret_name" {
+  description = "Secrets Manager secret name for DB port"
+  value       = module.rds.port_secret_name
+}
+
 output "certificate_arn" {
   description = "ACM certificate ARN"
   value       = module.dns.certificate_arn

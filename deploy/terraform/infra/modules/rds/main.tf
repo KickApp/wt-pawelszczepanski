@@ -109,3 +109,34 @@ resource "aws_secretsmanager_secret_version" "db_password" {
   secret_id     = aws_secretsmanager_secret.db_password.id
   secret_string = random_password.db_password.result
 }
+
+# Store DB connection info in Secrets Manager
+resource "aws_secretsmanager_secret" "db_host" {
+  name                    = "accounting/db-host"
+  description             = "RDS endpoint for the accounting database"
+  recovery_window_in_days = 0
+
+  tags = {
+    Terraform = "true"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_host" {
+  secret_id     = aws_secretsmanager_secret.db_host.id
+  secret_string = split(":", aws_db_instance.this.endpoint)[0]
+}
+
+resource "aws_secretsmanager_secret" "db_port" {
+  name                    = "accounting/db-port"
+  description             = "RDS port for the accounting database"
+  recovery_window_in_days = 0
+
+  tags = {
+    Terraform = "true"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_port" {
+  secret_id     = aws_secretsmanager_secret.db_port.id
+  secret_string = tostring(aws_db_instance.this.port)
+}

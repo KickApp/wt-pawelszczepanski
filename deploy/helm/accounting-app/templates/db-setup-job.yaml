@@ -32,9 +32,15 @@ spec:
               fi
           env:
             - name: PGHOST
-              value: {{ .Values.env.DB_HOST | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "accounting-app.fullname" . }}
+                  key: DB_HOST
             - name: PGPORT
-              value: {{ .Values.env.DB_PORT | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "accounting-app.fullname" . }}
+                  key: DB_PORT
             - name: PGUSER
               value: {{ .Values.env.DB_USER | quote }}
             - name: PGPASSWORD
