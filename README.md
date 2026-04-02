@@ -145,34 +145,25 @@ The Excel format lists each transaction under both involved accounts. Rather tha
 ---
 
 ## API Reference
-
-### Accounts
-- `GET /api/accounts` — List all accounts
-- `POST /api/accounts` — Create account `{ code, name, type }`
-
-### Journal Entries
-- `POST /api/journal-entries` — Create balanced entry
-- `GET /api/journal-entries?startDate=&endDate=&page=&limit=` — List entries (paginated)
-- `GET /api/journal-entries/:ref` — Get entry by reference number
-- `PUT /api/journal-entries/:ref` — Update entry
-- `DELETE /api/journal-entries/:ref` — Delete entry
-
-### Reports
-- `GET /api/reports/trial-balance?startDate=&endDate=` — Trial Balance
-- `GET /api/reports/profit-and-loss?startDate=&endDate=` — Profit & Loss
-- `GET /api/reports/balance-sheet?asOfDate=` — Balance Sheet
-
-### Data
-- `POST /api/ingest` — Ingest Excel GL export
-- `GET /api/health` — Health check
+See [openapi.yaml](./openapi.yaml)
 
 ---
+
+## Deployment
+- terraform "infra" deployment is not automated, executed manually, proper stack will require flow to plan and approve changes with tools like runatlantis.io or custom, not worth implementing, for simple setup this is better, trust me ;)
+- Simplified EKS, common k8s cluster for main deployment and ephemeral (per pr deployment)
+- Separate RDS per production/dev environment, all ephemeral dbs will live inside dev rds, this limits nr of concurrent envs, small rds allows only 80 connections (min 2 connections per app instance)
+- Ephemeral environments (helm charts and dbs) are managed outside of terraform, thats simplification, with tools like ArgoCD that could be implemented as a code
+- Security:
+- - app uses rds_superuser - simplification
+- - domain is managed outside of AWS (cloudflare) and this setup ignores that, communication between cloudflare->aws is done without TLS, lets encrypt with http validation or importing cloudflare zone to terraform would solve this - simplification
+
 
 ## Tech Stack
 
 | Component | Technology |
 |---|---|
-| Runtime | Node.js 20 + TypeScript |
+| Runtime | Node.js + TypeScript |
 | Framework | Express.js |
 | Database | PostgreSQL 16 |
 | Query Builder | Knex |

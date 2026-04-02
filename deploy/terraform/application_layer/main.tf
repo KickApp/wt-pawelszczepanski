@@ -109,11 +109,6 @@ resource "helm_release" "accounting_app" {
   }
 
   set {
-    name  = "ingress.certificateArn"
-    value = local.certificate_arn
-  }
-
-  set {
     name  = "ingress.host"
     value = var.domain_name
   }

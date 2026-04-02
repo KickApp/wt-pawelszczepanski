@@ -53,6 +53,16 @@ output "external_secrets_role_arn" {
   value       = module.eks.external_secrets_role_arn
 }
 
+output "node_security_group_id" {
+  description = "Security group ID of EKS nodes"
+  value       = module.eks.node_security_group_id
+}
+
+output "private_subnet_ids" {
+  description = "Private subnet IDs"
+  value       = module.vpc.private_subnet_ids
+}
+
 output "ecr_repository_url" {
   description = "ECR repository URL"
   value       = aws_ecr_repository.app.repository_url
@@ -68,7 +78,3 @@ output "app_url" {
   value       = "https://${var.domain_name}"
 }
 
-output "acm_validation_records" {
-  description = "Create these DNS records to validate the ACM certificate"
-  value       = module.dns.domain_validation_options
-}

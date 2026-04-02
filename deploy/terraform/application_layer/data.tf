@@ -16,7 +16,6 @@ locals {
   rds_endpoint           = data.terraform_remote_state.infra.outputs.rds_endpoint
   rds_port               = data.terraform_remote_state.infra.outputs.rds_port
   rds_password_secret    = data.terraform_remote_state.infra.outputs.rds_password_secret_name
-  certificate_arn        = data.terraform_remote_state.infra.outputs.certificate_arn
   lb_controller_role_arn = data.terraform_remote_state.infra.outputs.lb_controller_role_arn
   external_dns_role_arn  = data.terraform_remote_state.infra.outputs.external_dns_role_arn
   external_secrets_role  = data.terraform_remote_state.infra.outputs.external_secrets_role_arn

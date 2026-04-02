@@ -9,10 +9,13 @@ on:
 permissions:
   id-token: write
   contents: write
+  pull-requests: write
 
 env:
   AWS_REGION: us-west-2
   ECR_REPOSITORY: accounting-app
+  EKS_CLUSTER: accounting
+  DOMAIN: accounting-8cvbj8765rv.pawel.dev
 
 jobs:
   test:
@@ -49,22 +52,36 @@ jobs:
 
   build-and-push:
     needs: test
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Generate version
+      - name: Generate version (main)
+        if: github.ref == 'refs/heads/main'
         id: version
         run: |
           PATCH=$(git rev-list --count HEAD)
           VERSION="0.${PATCH}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Generated version: ${VERSION}"
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REF_NAME=$(echo "${{ github.head_ref }}" | tr '/' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
+            SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)
+            TAG="gha-${REF_NAME}-${SHORT_SHA}"
+          else
+            TAG="${{ steps.version.outputs.version }}"
+          fi
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Image tag: ${TAG}"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -84,18 +101,20 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.version.outputs.version }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image_tag }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/{1}:{2}', steps.login-ecr.outputs.registry, env.ECR_REPOSITORY, github.sha) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Tag version in git
+        if: github.ref == 'refs/heads/main'
         run: |
           git tag "v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
 
   deploy:
     needs: build-and-push
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -119,3 +138,102 @@ jobs:
       - name: Terraform Apply
         working-directory: deploy/terraform/application_layer
         run: terraform apply -auto-approve -var="app_image_tag=${{ needs.build-and-push.outputs.version }}"
+
+  deploy-pr:
+    needs: build-and-push
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.5"
+          terraform_wrapper: false
+
+      - name: Get dev RDS info
+        id: dev-rds
+        working-directory: deploy/terraform/dev-rds
+        run: |
+          terraform init
+          echo "endpoint=$(terraform output -raw endpoint)" >> "$GITHUB_OUTPUT"
+          echo "port=$(terraform output -raw port)" >> "$GITHUB_OUTPUT"
+          echo "password_secret=$(terraform output -raw password_secret_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Get dev DB password
+        id: db-password
+        run: |
+          PASSWORD=$(aws secretsmanager get-secret-value \
+            --secret-id "${{ steps.dev-rds.outputs.password_secret }}" \
+            --query SecretString --output text)
+          echo "::add-mask::${PASSWORD}"
+          echo "password=${PASSWORD}" >> "$GITHUB_OUTPUT"
+
+      - name: Get ECR repository URL
+        id: ecr
+        run: |
+          URL=$(aws ecr describe-repositories \
+            --repository-names "${{ env.ECR_REPOSITORY }}" \
+            --query 'repositories[0].repositoryUri' --output text)
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup kubectl and Helm
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Deploy PR environment
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          ECR_URL: ${{ steps.ecr.outputs.url }}
+          DEV_RDS_ENDPOINT: ${{ steps.dev-rds.outputs.endpoint }}
+          DEV_RDS_PORT: ${{ steps.dev-rds.outputs.port }}
+          DB_PASSWORD: ${{ steps.db-password.outputs.password }}
+        run: |
+          helm upgrade --install "pr-${PR_NUMBER}" ./deploy/helm/accounting-app \
+            --namespace "pr-${PR_NUMBER}" \
+            --create-namespace \
+            -f deploy/helm/pr-values.yaml \
+            --set image.repository="${ECR_URL}" \
+            --set image.tag="${IMAGE_TAG}" \
+            --set ingress.host="pr-${PR_NUMBER}.${DOMAIN}" \
+            --set env.DB_HOST="${DEV_RDS_ENDPOINT}" \
+            --set env.DB_PORT="${DEV_RDS_PORT}" \
+            --set env.DB_NAME="pr_${PR_NUMBER}" \
+            --set env.DB_USER="app" \
+            --set dbSetup.password="${DB_PASSWORD}" \
+            --set dbTeardown.password="${DB_PASSWORD}" \
+            --set externalSecrets.enabled=true \
+            --set externalSecrets.dbPasswordSecretName="dev/db-password" \
+            --set externalSecrets.googleSaKeySecretName="accounting/google-sa-key" \
+            --wait --timeout 5m
+
+      - name: Comment PR with environment URL
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          URL="https://pr-${PR_NUMBER}.${DOMAIN}"
+          BODY="**Preview environment deployed**
+
+          ${URL}
+
+          _Image:_ \`${{ needs.build-and-push.outputs.image_tag }}\`"
+
+          # Update existing comment or create new one
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | startswith("**Preview environment")) | .id' | tail -1)
+
+          if [ -n "$COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+              -X PATCH -f body="${BODY}"
+          else
+            gh pr comment "${PR_NUMBER}" --body "${BODY}"
+          fi

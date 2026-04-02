@@ -1,0 +1,44 @@
+{{- if .Values.dbTeardown.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "accounting-app.fullname" . }}-db-teardown
+  labels:
+    {{- include "accounting-app.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-teardown
+          image: postgres:17-alpine
+          command:
+            - sh
+            - -c
+            - |
+              echo "Dropping database $DB_NAME..."
+              dropdb --if-exists "$DB_NAME"
+              echo "Database $DB_NAME dropped"
+          env:
+            - name: PGHOST
+              value: {{ .Values.env.DB_HOST | quote }}
+            - name: PGPORT
+              value: {{ .Values.env.DB_PORT | quote }}
+            - name: PGUSER
+              value: {{ .Values.env.DB_USER | quote }}
+            - name: PGPASSWORD
+              value: {{ .Values.dbTeardown.password | quote }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+{{- end }}

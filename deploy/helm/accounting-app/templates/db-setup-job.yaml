@@ -1,0 +1,49 @@
+{{- if .Values.dbSetup.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "accounting-app.fullname" . }}-db-setup
+  labels:
+    {{- include "accounting-app.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-setup
+          image: postgres:17-alpine
+          command:
+            - sh
+            - -c
+            - |
+              echo "Checking if database $DB_NAME exists..."
+              if psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+                echo "Database $DB_NAME already exists"
+              else
+                echo "Creating database $DB_NAME..."
+                createdb "$DB_NAME"
+                echo "Database $DB_NAME created"
+              fi
+          env:
+            - name: PGHOST
+              value: {{ .Values.env.DB_HOST | quote }}
+            - name: PGPORT
+              value: {{ .Values.env.DB_PORT | quote }}
+            - name: PGUSER
+              value: {{ .Values.env.DB_USER | quote }}
+            - name: PGPASSWORD
+              value: {{ .Values.dbSetup.password | quote }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+{{- end }}

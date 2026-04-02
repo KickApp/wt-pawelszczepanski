@@ -1,0 +1,47 @@
+name: PR Environment Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  EKS_CLUSTER: accounting
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Uninstall PR Helm release
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          RELEASE="pr-${PR_NUMBER}"
+          NAMESPACE="pr-${PR_NUMBER}"
+
+          if helm status "${RELEASE}" -n "${NAMESPACE}" &>/dev/null; then
+            echo "Uninstalling Helm release ${RELEASE}..."
+            helm uninstall "${RELEASE}" -n "${NAMESPACE}" --wait --timeout 3m
+          else
+            echo "Helm release ${RELEASE} not found, skipping"
+          fi
+
+      - name: Delete namespace
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: kubectl delete namespace "pr-${PR_NUMBER}" --ignore-not-found --wait=false

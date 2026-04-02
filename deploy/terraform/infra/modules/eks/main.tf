@@ -119,7 +119,10 @@ resource "aws_iam_policy" "external_secrets" {
           "secretsmanager:DescribeSecret",
           "secretsmanager:ListSecretVersionIds"
         ]
-        Resource = "arn:aws:secretsmanager:*:*:secret:accounting/*"
+        Resource = [
+          "arn:aws:secretsmanager:*:*:secret:accounting/*",
+          "arn:aws:secretsmanager:*:*:secret:dev/*"
+        ]
       }
     ]
   })

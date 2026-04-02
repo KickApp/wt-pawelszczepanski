@@ -19,7 +19,7 @@ service:
 ingress:
   enabled: true
   host: accounting-8cvbj8765rv.pawel.dev
-  certificateArn: ""
+  groupName: accounting
 
 env:
   NODE_ENV: production
@@ -50,6 +50,14 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+
+dbSetup:
+  enabled: false
+  password: ""
+
+dbTeardown:
+  enabled: false
+  password: ""
 
 health:
   path: /api/health

@@ -56,6 +56,20 @@ resource "aws_ecr_lifecycle_policy" "app" {
     rules = [
       {
         rulePriority = 1
+        description  = "Expire PR images after 14 days"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["gha-"]
+          countType     = "sinceImagePushed"
+          countUnit     = "days"
+          countNumber   = 14
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
         description  = "Keep last 20 images"
         selection = {
           tagStatus   = "any"

@@ -1,0 +1,63 @@
+name: PR Environment Garbage Collection
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Every Monday at 06:00 UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  EKS_CLUSTER: accounting
+
+jobs:
+  gc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Get open PR numbers
+        id: open-prs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OPEN_PRS=$(gh pr list --repo "${{ github.repository }}" --state open --json number --jq '.[].number' | tr '\n' ' ')
+          echo "open_prs=${OPEN_PRS}" >> "$GITHUB_OUTPUT"
+          echo "Open PRs: ${OPEN_PRS}"
+
+      - name: Clean up orphaned PR environments
+        env:
+          OPEN_PRS: ${{ steps.open-prs.outputs.open_prs }}
+        run: |
+          # List all Helm releases with pr- prefix across all namespaces
+          RELEASES=$(helm list --all-namespaces --filter '^pr-' --short 2>/dev/null || true)
+
+          if [ -z "$RELEASES" ]; then
+            echo "No PR Helm releases found"
+            exit 0
+          fi
+
+          for RELEASE in $RELEASES; do
+            # Extract PR number from release name (pr-42 -> 42)
+            PR_NUM=${RELEASE#pr-}
+
+            # Check if this PR is still open
+            if echo " ${OPEN_PRS} " | grep -q " ${PR_NUM} "; then
+              echo "PR #${PR_NUM} is still open, skipping"
+              continue
+            fi
+
+            echo "PR #${PR_NUM} is closed, cleaning up ${RELEASE}..."
+            helm uninstall "${RELEASE}" -n "${RELEASE}" --wait --timeout 3m || true
+            kubectl delete namespace "${RELEASE}" --ignore-not-found --wait=false
+          done
