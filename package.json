@@ -10,7 +10,7 @@
     "lint": "eslint src/ --ext .ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "docker compose -f docker-compose.test.yml up -d --wait && DB_PORT=5433 DB_NAME=accounting_test DB_PASSWORD=testpassword vitest run tests/integration/ ; docker compose -f docker-compose.test.yml down",
+    "test:integration": "docker compose -p kick-test -f docker-compose.test.yml up -d --wait && DB_PORT=5433 DB_NAME=accounting_test DB_PASSWORD=testpassword vitest run tests/integration/ ; docker compose -p kick-test -f docker-compose.test.yml down",
     "migrate": "knex migrate:latest --knexfile knexfile.ts",
     "migrate:rollback": "knex migrate:rollback --knexfile knexfile.ts",
     "load": "tsx scripts/load.ts"

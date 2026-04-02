@@ -18,3 +18,9 @@ variable "subnet_ids" {
   description = "Subnet IDs for the EKS cluster"
   type        = list(string)
 }
+
+variable "ci_role_arn" {
+  description = "IAM role ARN for CI/CD to get cluster admin access"
+  type        = string
+  default     = ""
+}

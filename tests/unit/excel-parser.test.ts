@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import path from 'path';
 import { parseExcelFile } from '../../src/utils/excel-parser';
 
-const EXCEL_PATH = path.join(__dirname, '../../Account_Transactions_of_Internet_Money_2025-01-01-2025-12-31.xlsx');
+const EXCEL_PATH = path.join(__dirname, '../../data/Account_Transactions_of_Internet_Money_2025-01-01-2025-12-31.xlsx');
 
 describe('parseExcelFile', () => {
   const parsed = parseExcelFile(EXCEL_PATH);

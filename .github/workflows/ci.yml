@@ -53,7 +53,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      image_tag: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +61,6 @@ jobs:
       - name: Generate version
         id: version
         run: |
-          # Count merges to main (commits on main branch) starting from 0.1
           PATCH=$(git rev-list --count HEAD)
           VERSION="0.${PATCH}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
@@ -95,3 +93,29 @@ jobs:
         run: |
           git tag "v${{ steps.version.outputs.version }}"
           git push origin "v${{ steps.version.outputs.version }}"
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.5"
+
+      - name: Terraform Init
+        working-directory: infra/terraform/application_layer
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infra/terraform/application_layer
+        run: terraform apply -auto-approve -var="app_image_tag=${{ needs.build-and-push.outputs.version }}"

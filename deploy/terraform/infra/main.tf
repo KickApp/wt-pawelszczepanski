@@ -13,6 +13,7 @@ module "eks" {
   cluster_version = "1.32"
   vpc_id          = module.vpc.vpc_id
   subnet_ids      = module.vpc.private_subnet_ids
+  ci_role_arn     = aws_iam_role.github_actions.arn
 }
 
 module "rds" {
@@ -82,9 +83,9 @@ resource "aws_iam_openid_connect_provider" "github" {
   }
 }
 
-# IAM role for GitHub Actions to push to ECR
+# IAM role for GitHub Actions (ECR push + deploy)
 resource "aws_iam_role" "github_actions" {
-  name = "github-actions-ecr-push"
+  name = "github-actions-ci"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -138,6 +139,58 @@ resource "aws_iam_role_policy" "github_actions_ecr" {
           "ecr:CompleteLayerUpload"
         ]
         Resource = aws_ecr_repository.app.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "github_actions_terraform_state" {
+  name = "terraform-state"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::pawel-kick-accounting-terraform",
+          "arn:aws:s3:::pawel-kick-accounting-terraform/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem"
+        ]
+        Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/pawel-kick-accounting-terraform-locks"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "github_actions_eks" {
+  name = "eks-access"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters"
+        ]
+        Resource = module.eks.cluster_arn
       }
     ]
   })

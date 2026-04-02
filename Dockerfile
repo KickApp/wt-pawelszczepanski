@@ -15,6 +15,6 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/knexfile.ts ./
 COPY src/db/migrations/ ./src/db/migrations/
-COPY Account_Transactions_of_Internet_Money_2025-01-01-2025-12-31.xlsx ./data/
+COPY data/Account_Transactions_of_Internet_Money_2025-01-01-2025-12-31.xlsx ./data/
 EXPOSE 3000
 CMD ["node", "dist/index.js"]

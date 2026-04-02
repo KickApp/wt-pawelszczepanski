@@ -12,11 +12,9 @@ dist
 google-sa-key.json
 
 # Terraform
-infra/**/.terraform/
-infra/**/*.tfstate
-infra/**/*.tfstate.*
-infra/**/*.tfvars
-!infra/terraform/terraform.tfvars
-!infra/terraform/application_layer/terraform.tfvars
-infra/**/*.plan.out
-infra/**/plan.out
+deploy/**/.terraform/
+deploy/**/*.tfstate
+deploy/**/*.tfstate.*
+deploy/**/*.tfvars
+deploy/**/*.plan.out
+deploy/**/plan.out

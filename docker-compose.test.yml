@@ -14,3 +14,9 @@ services:
       interval: 2s
       timeout: 3s
       retries: 5
+    networks:
+      - test-net
+
+networks:
+  test-net:
+    driver: bridge

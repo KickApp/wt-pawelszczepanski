@@ -227,6 +227,69 @@ describe('Profit and Loss', () => {
     expect(report.otherIncomeExpenses.total).toBe(0);
     expect(report.netIncome).toBe(25000);
   });
+
+  it('net loss — expenses exceed revenue', async () => {
+    await createJE('2025-03-01', 'Small revenue', [
+      { accountId: testAccounts['10100'], debit: 5000 },
+      { accountId: testAccounts['40000'], credit: 5000 },
+    ]);
+    await createJE('2025-03-05', 'Large COGS', [
+      { accountId: testAccounts['50000'], debit: 12000 },
+      { accountId: testAccounts['10100'], credit: 12000 },
+    ]);
+    await createJE('2025-03-10', 'Rent', [
+      { accountId: testAccounts['60000'], debit: 4000 },
+      { accountId: testAccounts['10100'], credit: 4000 },
+    ]);
+
+    const report = await getProfitAndLoss('2025-01-01', '2025-12-31');
+
+    expect(report.income.total).toBe(5000);
+    expect(report.costOfGoodsSold.total).toBe(12000);
+    expect(report.grossProfit).toBe(-7000);
+    expect(report.operatingExpenses.total).toBe(4000);
+    expect(report.netOperatingIncome).toBe(-11000);
+    expect(report.netIncome).toBe(-11000);
+  });
+
+  it('empty period — no income or expense transactions', async () => {
+    // Only A/L/E transactions, no I/E
+    await createJE('2025-03-01', 'Owner investment', [
+      { accountId: testAccounts['10100'], debit: 10000 },
+      { accountId: testAccounts['31000'], credit: 10000 },
+    ]);
+
+    const report = await getProfitAndLoss('2025-01-01', '2025-12-31');
+
+    expect(report.income.total).toBe(0);
+    expect(report.income.accounts).toHaveLength(0);
+    expect(report.costOfGoodsSold.total).toBe(0);
+    expect(report.operatingExpenses.total).toBe(0);
+    expect(report.otherIncomeExpenses.total).toBe(0);
+    expect(report.grossProfit).toBe(0);
+    expect(report.netOperatingIncome).toBe(0);
+    expect(report.netIncome).toBe(0);
+  });
+
+  it('contra entry — expense account with credits yields negative balance', async () => {
+    // 80000 (Other Expenses) receives a credit — e.g., interest income coded in 8xxxx range
+    await createJE('2025-03-01', 'Revenue', [
+      { accountId: testAccounts['10100'], debit: 10000 },
+      { accountId: testAccounts['40000'], credit: 10000 },
+    ]);
+    await createJE('2025-03-05', 'Interest income booked as 8xxxx', [
+      { accountId: testAccounts['10100'], debit: 500 },
+      { accountId: testAccounts['80000'], credit: 500 },
+    ]);
+
+    const report = await getProfitAndLoss('2025-01-01', '2025-12-31');
+
+    expect(report.income.total).toBe(10000);
+    // 80000 is debit-normal (Expenses): balance = debit - credit = 0 - 500 = -500
+    expect(report.otherIncomeExpenses.total).toBe(-500);
+    // netIncome = netOperatingIncome - otherIncomeExpenses = 10000 - (-500) = 10500
+    expect(report.netIncome).toBe(10500);
+  });
 });
 
 describe('Balance Sheet', () => {
@@ -341,5 +404,90 @@ describe('Balance Sheet', () => {
     // Equity: owner (200000) + net income (10000 revenue - 3000 rent = 7000) = 207000
     expect(report.equity.total).toBe(207000);
     expect(report.totalLiabilitiesAndEquity).toBe(270000);
+  });
+
+  it('empty ledger — all zeros, still balanced', async () => {
+    const report = await getBalanceSheet('2025-12-31');
+
+    expect(report.isBalanced).toBe(true);
+    expect(report.totalAssets).toBe(0);
+    expect(report.totalLiabilities).toBe(0);
+    expect(report.equity.total).toBe(0);
+    expect(report.totalLiabilitiesAndEquity).toBe(0);
+    expect(report.currentAssets.accounts).toHaveLength(0);
+    expect(report.nonCurrentAssets.accounts).toHaveLength(0);
+    expect(report.currentLiabilities.accounts).toHaveLength(0);
+    expect(report.nonCurrentLiabilities.accounts).toHaveLength(0);
+    expect(report.equity.accounts).toHaveLength(0);
+  });
+
+  it('cross-year: prior-year I/E excluded from NET-INCOME, A/L/E balances included', async () => {
+    // 2024: owner invests + earns revenue
+    await createJE('2024-06-01', '2024 Owner investment', [
+      { accountId: testAccounts['10100'], debit: 80000 },
+      { accountId: testAccounts['31000'], credit: 80000 },
+    ]);
+    await createJE('2024-09-01', '2024 Revenue', [
+      { accountId: testAccounts['10100'], debit: 30000 },
+      { accountId: testAccounts['40000'], credit: 30000 },
+    ]);
+    await createJE('2024-10-01', '2024 Rent', [
+      { accountId: testAccounts['60000'], debit: 10000 },
+      { accountId: testAccounts['10100'], credit: 10000 },
+    ]);
+    // 2025: more revenue
+    await createJE('2025-03-01', '2025 Revenue', [
+      { accountId: testAccounts['10100'], debit: 12000 },
+      { accountId: testAccounts['40000'], credit: 12000 },
+    ]);
+    await createJE('2025-04-01', '2025 Rent', [
+      { accountId: testAccounts['60000'], debit: 2000 },
+      { accountId: testAccounts['10100'], credit: 2000 },
+    ]);
+
+    const report = await getBalanceSheet('2025-06-30');
+
+    // Bank: 80000 + 30000 - 10000 + 12000 - 2000 = 110000 (includes all-time cash flows)
+    expect(report.totalAssets).toBe(110000);
+
+    // NET-INCOME only includes 2025 fiscal year (Jan 1 2025 – Jun 30 2025)
+    // 2025 net income = 12000 revenue - 2000 rent = 10000
+    const netIncomeRow = report.equity.accounts.find((a) => a.code === 'NET-INCOME');
+    expect(netIncomeRow).toBeDefined();
+    expect(netIncomeRow!.balance).toBe(10000);
+
+    // Owner equity (80000) + 2025 net income (10000) = 90000
+    expect(report.equity.total).toBe(90000);
+    expect(report.totalLiabilitiesAndEquity).toBe(90000);
+
+    // BS does NOT balance: 2024 net income (20000) was never closed to retained earnings
+    // Assets (110000) != L+E (90000) — gap is exactly the prior-year net income
+    expect(report.isBalanced).toBe(false);
+    expect(report.totalAssets - report.totalLiabilitiesAndEquity).toBe(20000);
+  });
+
+  it('net income exactly zero suppresses synthetic equity row', async () => {
+    await createJE('2025-01-01', 'Owner investment', [
+      { accountId: testAccounts['10100'], debit: 50000 },
+      { accountId: testAccounts['31000'], credit: 50000 },
+    ]);
+    // Revenue = Expense → net income is 0
+    await createJE('2025-06-01', 'Revenue', [
+      { accountId: testAccounts['10100'], debit: 8000 },
+      { accountId: testAccounts['40000'], credit: 8000 },
+    ]);
+    await createJE('2025-06-15', 'Rent', [
+      { accountId: testAccounts['60000'], debit: 8000 },
+      { accountId: testAccounts['10100'], credit: 8000 },
+    ]);
+
+    const report = await getBalanceSheet('2025-12-31');
+
+    expect(report.isBalanced).toBe(true);
+    expect(report.totalAssets).toBe(50000);
+    expect(report.equity.total).toBe(50000);
+    // No NET-INCOME row when net income is zero
+    expect(report.equity.accounts).toHaveLength(1);
+    expect(report.equity.accounts.find((a) => a.code === 'NET-INCOME')).toBeUndefined();
   });
 });
