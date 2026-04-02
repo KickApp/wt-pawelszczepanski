@@ -1,7 +1,9 @@
 import Big from 'big.js';
 import * as XLSX from 'xlsx';
 import { db } from '../db/connection';
-import { getSheetsClient, getDriveClient } from './google-auth';
+import { getSheetsClient } from './google-auth';
+import { logger } from '../logger';
+import { config } from '../config';
 
 interface GLRow {
   date: string;
@@ -202,7 +204,6 @@ export async function exportToExcel(startDate: string, endDate: string): Promise
 export async function exportToGoogleSheets(
   startDate: string,
   endDate: string,
-  shareWith?: string,
 ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
   const [glData, splitMap] = await Promise.all([
     fetchGLData(startDate, endDate),
@@ -212,61 +213,63 @@ export async function exportToGoogleSheets(
   const { rows } = buildSheetRows(glData, splitMap, startDate, endDate);
 
   const sheets = getSheetsClient();
-  const drive = getDriveClient();
+  const spreadsheetId = config.googleSpreadsheetId;
+  const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
 
-  const createRes = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: { title: `Pawel's Ledger - General Ledger ${startDate} to ${endDate}` },
-      sheets: [{ properties: { title: 'General Ledger' } }],
-    },
-  });
-
-  const spreadsheetId = createRes.data.spreadsheetId!;
-  const spreadsheetUrl = createRes.data.spreadsheetUrl!;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: 'General Ledger!A1',
-    valueInputOption: 'RAW',
-    requestBody: { values: rows },
-  });
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      requests: [
-        {
-          repeatCell: {
-            range: { sheetId: 0, startRowIndex: 5, endRowIndex: 6 },
-            cell: {
-              userEnteredFormat: {
-                textFormat: { bold: true },
-                backgroundColor: { red: 0.93, green: 0.93, blue: 0.93 },
-              },
-            },
-            fields: 'userEnteredFormat(textFormat,backgroundColor)',
-          },
-        },
-        {
-          updateSheetProperties: {
-            properties: { sheetId: 0, gridProperties: { frozenRowCount: 6 } },
-            fields: 'gridProperties.frozenRowCount',
-          },
-        },
-        {
-          autoResizeDimensions: {
-            dimensions: { sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 8 },
-          },
-        },
-      ],
-    },
-  });
-
-  if (shareWith) {
-    await drive.permissions.create({
-      fileId: spreadsheetId,
-      requestBody: { type: 'user', role: 'writer', emailAddress: shareWith },
+  try {
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: 'Sheet1',
     });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Sheet1!A1",
+      valueInputOption: 'RAW',
+      requestBody: { values: rows },
+    });
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            repeatCell: {
+              range: { sheetId: 0, startRowIndex: 5, endRowIndex: 6 },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: { bold: true },
+                  backgroundColor: { red: 0.93, green: 0.93, blue: 0.93 },
+                },
+              },
+              fields: 'userEnteredFormat(textFormat,backgroundColor)',
+            },
+          },
+          {
+            updateSheetProperties: {
+              properties: { sheetId: 0, gridProperties: { frozenRowCount: 6 } },
+              fields: 'gridProperties.frozenRowCount',
+            },
+          },
+          {
+            autoResizeDimensions: {
+              dimensions: { sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 8 },
+            },
+          },
+        ],
+      },
+    });
+  } catch (err: any) {
+    logger.error(
+      {
+        status: err.status ?? err.code,
+        message: err.message,
+        errors: err.response?.data?.error?.errors,
+        spreadsheetId,
+      },
+      'Google Sheets API error',
+    );
+    throw err;
   }
 
   return { spreadsheetId, spreadsheetUrl };

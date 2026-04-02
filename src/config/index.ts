@@ -14,4 +14,5 @@ export const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
   googleSaKeyPath: process.env.GOOGLE_SA_KEY_PATH,
   googleSaKeyJson: process.env.GOOGLE_SA_KEY_JSON,
+  googleSpreadsheetId: process.env.GOOGLE_SPREADSHEET_ID || '1dvgo8AzBKgPq0diKu4KZ0TnbkPGYyI-ZCu6MXZMw7KU',
 };
